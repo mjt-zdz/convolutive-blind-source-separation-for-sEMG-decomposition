@@ -1,4 +1,4 @@
-function [x_wit, U, Landa] = whiten(x)
+function [x_wit, U, Landa] = whiten(x, options)
 %{
 Whitens the data using eigen value decomposition. 
 
@@ -25,19 +25,34 @@ Outputs
 
 arguments
     x double
+    options.method string = 'zca'
+    options.pcs int64 = size(x, 1)
 end
 
-C = cov(x', 1);
-[U, Landa] = eig(C);
-eig_vals = diag(Landa);
-[S,I] = sort(eig_vals,'descend');
+if strcmp(options.method, 'zca')
+    %% evd    
+    C = cov(x', 1); % Compute covariance matrix
+    [U, Lamda] = eig(C); 
+    W = U * sqrtm(inv(Lamda + 1e-6 * eye(size(Lamda)))) * U';
+    x_wit = W * x;
+    
+    %% svd
+    %{
+    [U, S, ~] = svd(x');
+    U = U * sign(U(1));
+    W = U * diag(1 ./ sqrt(diag(S)+1e-6)) * U';
+    x_wit = W * x;
+    %}
+end
 
-reg_fac = mean(S((ceil((length(S)+1)/2)):end));
-S(S<reg_fac) = reg_fac;
-
-Landa = diag(S);
-U = U(:,I);
-
-x_wit = U*Landa^(-1/2)*U'*x;
+if strcmp(options.method, 'pca')
+    C = cov(x', 1); % Compute covariance matrix
+    [U, Lamda] = eig(C); 
+    [S, I] = sort(diag(Lamda), 'descend');
+    Lamda = diag(S(1:options.pcs));
+    U = U(:, I(1:options.pcs));
+    W = U * sqrtm(inv(Lamda + 1e-6 * eye(size(Lamda)))) * U';
+    x_wit = W * x;
+end
 
 end

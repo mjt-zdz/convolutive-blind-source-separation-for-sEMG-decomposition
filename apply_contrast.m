@@ -65,7 +65,25 @@ switch fun
                 y = -exp(-(x.^2)/2) + (x.^2).*(exp(-(x.^2)/2));
             otherwise
                 y = exp(-(x.^2)/2);
-        end      
+        end
+    case "kurtosis"
+        switch der
+            case "der"
+                y=x.^3;
+            case "der_der"
+                y=3*(x.^2);
+            otherwise
+                y=(x.^4)/4;
+        end
+    case "rati"
+        switch der
+            case "der"
+                y=x/(1+x.^2);
+            case "der_der"
+                y=(1-x.^2)/((1+x.^2).^2);
+            otherwise
+                y=log((x.^2)+1)/2;
+        end
 end
 
 

@@ -55,33 +55,27 @@ arguments
     z double
     w_init double
     B double
-    options.tolx double = 10e-4
+    options.tolx double = 1e-4
     options.cont_fun string = "skew"
     options.max_iter_sep double = 10
     options.verbose logical = false
 end
 
-w_curr = w_init; % current separation vector initialized to be the function argument w_init
+w_curr = normal(w_init); % current separation vector initialized to be the function argument w_init
 w_prev = w_curr; % previous separation vector. This variable will hold the separatin vector 
                  % from the previous iteration.
-n = 0; % loop count
+n = 1; % loop count
 
 if isempty(B) % if we are in the first iteration on them main loop, B will be empty and needs 
-              % to be initialized to all zeros before proceeding inside the
-              % separation loop.
+              % to be initialized to all zeros before proceeding inside the separation loop.
     B = zeros(size(z,1),1);
 end
 
 % Separation loop 
-% The first condition checks convergence and the second one checks not
-% converging. Either happens, the loop stops. 
+% The first condition checks convergence and the second one checks not converging. Either happens, the loop stops. 
 
-while (abs(w_curr'*w_prev - 1) > options.tolx) && (n < options.max_iter_sep) 
-
-    w_prev = w_curr; % previous separation vector. This variable will hold the separatin vector 
-                     % from the previous iteration.
-    % Step 2a in pseudo code: Check paper for the formulas. g(x) and g'(x)
-    % are applied through the apply_contrast function.
+while n <= options.max_iter_sep
+    % Step 2a in pseudo code: Check paper for the formulas. g(x) and g'(x) are applied through the apply_contrast function.
     wz = w_prev'*z; 
     A = mean(apply_contrast(wz, options.cont_fun, "der_der"));
     w_curr = apply_contrast(wz, options.cont_fun, "der");
@@ -91,21 +85,21 @@ while (abs(w_curr'*w_prev - 1) > options.tolx) && (n < options.max_iter_sep)
     % Step 2b: source deflation procedure
     w_curr = deflate(w_curr, B);
     % Step 2c: Normalization 
-    w_curr = normal(w_curr);
+    w_curr = normal(w_curr); % L2
     
+    distance = 1-abs(w_curr'*w_prev);
+    w_prev = w_curr; % previous separation vector. This variable will hold the separatin vector from the previous iteration.
+    if distance < options.tolx
+        % Displaying the information in the command window
+        if options.verbose
+            disp("fixed-point algorithm converged after " + string(n) + " iterations.")
+        end
+        break;
+    end
     n = n + 1;
-
 end
-
-% Displaying the information in the command window
-if n < options.max_iter_sep && options.verbose
-    disp("fixed-point algorithm converged after " + string(n) + " iterations.")
-elseif n == options.max_iter_sep
-    % if the separation loop did not converge, the function returns an
-    % empty array.
+if n > options.max_iter_sep
     w_curr = [];
-    warning("seperation loop reached the max iteration.")
+    warning("Seperation loop reached the max iteration.")
 end
-
-
 end

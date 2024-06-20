@@ -1,4 +1,4 @@
-function [roa,cj] = RoA(MUPulses1, MUPulses2, fs1, fs2, tol)
+function [roa,cj] = RoA_sim(MUPulses1, MUPulses2, tol)
 %{
 Rate of agreement (RoA) is used as a measure to validate the accuracy of decomposition algorithm. 
 It is a measure that compares the results of two different algorithms. 
@@ -36,11 +36,8 @@ cj = zeros(numel(MUPulses1), numel(MUPulses2));
 for ii = 1:numel(MUPulses1)
     for jj = 1:numel(MUPulses2)
 
-        Aidx = MUPulses1{ii}; % the firing indices of the first identifed MU in the first dataset
-        Bidx = MUPulses2{jj}; % the firing indices of the first identified MU in the second dataset
-        
-        timeA = ((Aidx-1)*1000)/fs1;
-        timeB = ((Bidx-1)*1000)/fs2;
+        timeA = MUPulses1{ii}; % the firing indices of the first identifed MU in the first dataset
+        timeB = MUPulses2{jj}; % the firing indices of the first identified MU in the second dataset
 
         A_common_indices = [];
         B_common_indices = [];
@@ -60,7 +57,7 @@ for ii = 1:numel(MUPulses1)
                 A_common_indices = [A_common_indices k];
             elseif length(commonB) > 1
                 commonB = commonB(1);
-                warning("two common indices were found. ii = " + string(ii) + " jj = " + string(jj) + " k = " + string(k))
+                warning("two common indices were found. i = " + string(i) + " j = " + string(j) + " k = " + string(k))
             end
         
         end
@@ -71,12 +68,12 @@ for ii = 1:numel(MUPulses1)
             C = length(A_common_indices);
         end
         
-        A = length(Aidx) - length(A_common_indices);
-        B = length(Bidx) - length(B_common_indices);
+        A = length(timeA) - length(A_common_indices);
+        B = length(timeB) - length(B_common_indices);
         
         roaTemp = 100*(C/(A+B+C));
         roa(ii,jj) = roaTemp;
-        cj(ii,jj) = C/max(length(Aidx),length(Bidx));
+        cj(ii,jj) = C/max(length(timeA),length(timeB));
     end
 end
 end

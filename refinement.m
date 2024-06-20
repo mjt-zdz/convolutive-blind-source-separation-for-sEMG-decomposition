@@ -1,5 +1,4 @@
-function  [w_out, s_out, a_indices_out, sil_score, pnr_score , saved_cv] = ...
-refinement(w_in, z, options)
+function  [w_out, s_out, a_indices_out, sil_score, pnr_score , saved_cv] = refinement(w_in, z, fs, options)
 %{
 This function implements the refinement loop (second loop, Steps 4 and 5 in the pseudo code 
 in the paper).
@@ -75,6 +74,7 @@ Outputs
 arguments
     w_in double
     z double
+    fs double
     options.max_iter_ref double = 20
     options.l_peaks double = 31
     options.k_plot logical = false
@@ -88,29 +88,54 @@ n = 0;  % while loop counter
 w_curr = w_in; % the seperation vector to be refined 
 
 while 1 % as MATLAB does not have a do-while structure, the loop condition is checked at the end with an if clause and
-    % break command is used to terminate the loop. This is to make sure the
-    % loop executes at least once.
-
+    % break command is used to terminate the loop. This is to make sure the loop executes at least once.
     n = n + 1; 
-
     w_curr = normal(w_curr); % normalizing the new estimates for seperation vector
     
     % step 5a. in the pseudo code
     s_curr = w_curr'*z; % calcuting the source associated with w_curr 
-    s_curr2 = s_curr.^2; % calculating the squared of the source 
+
+%     s_curr2 = s_curr.^2; % calculating the squared of the source 
 
     % step 5b. in the pseudo code
     % peak detection algorithm applied to the squared of the source vector
     % with a minimum peak distance of 2*l_peaks samples. These peaks will go
     % through a Kmeans classification algorithm to two clusters of high and
     % low peaks.
-    [pks, locs] = findpeaks(s_curr2, 'MinPeakDistance', options.l_peaks); 
-    % pks = s_i2(locs)
-
-    % Kmeans++ algorithm applied to the peaks identified above to find to clusters, one for high peaks
-    % and one for low peaks. C contains the cluster centroids and idx
-    % contains the index of the cluster that each data point belongs to.
+    [pks, locs] = findpeaks(s_curr, 'MinPeakDistance', options.l_peaks); 
+    pks_curr = pks;
+    % Kmeans++ algorithm applied to the peaks identified above to find to clusters, one for high peaks and one for low peaks. 
+    % C contains the cluster centroids and idx contains the index of the cluster that each data point belongs to.
     [idx, C] = kmeans(pks',2); 
+    idx_curr = idx;
+    % find out which cluster contains the large peaks and which the small peaks
+    [~, lrg_idx] = max(C);
+    [~, sml_idx] = min(C);
+    % Finds the indices of the high peaks and low peaks
+    a_indices = locs(idx == lrg_idx);
+    b_indices = locs(idx == sml_idx);
+    % step 5c in the pseudo code 
+    % save the coefficient of variation of ISIs from the previous
+    % iteration in cv_prev
+    cv_prev = cv_curr;
+    % calculate the new cv of ISIs 
+    isi = diff(a_indices/fs);
+    cv_curr = variation(isi);
+    % saves the calculated cv in an array if save_cv argument is true.
+    if options.save_cv
+        saved_cv(n) = cv_curr;
+    end
+
+    if isnan(cv_curr)
+        w_out = [];
+        s_out = [];
+        a_indices_out = [];
+        sil_score = [];
+        pnr_score = [];
+
+        warning("Spike detection failed.")
+        break;
+    end
 
     % If k_plot is true, the following code generates a figure with two
     % tiles for each iteration. The right tile depicts the squared of the
@@ -144,45 +169,24 @@ while 1 % as MATLAB does not have a do-while structure, the loop condition is ch
         box off
         ylim([min(s_curr2) max(s_curr2)])
 
-    end
-    
-    % find out which cluster contains the large peaks and which the small
-    % peaks
-    [~, lrg_idx] = max(C);
-    [~, sml_idx] = min(C);
-    % Finds the indices of the high peaks and low peaks
-    a_indices = locs(idx == lrg_idx);
-    b_indices = locs(idx == sml_idx);
-    
-    % step 5c in the pseudo code 
-    % save the coefficient of variation of ISIs from the previous
-    % iteration in cv_prev
-    cv_prev = cv_curr;
-    % calculate the new cv of ISIs 
-    isi = diff(a_indices);
-%     isi(isi>0.25*2048) = [];%%%%
-%     isi(isi<0.02*2048) = [];%%%%
-    cv_curr = variation(isi);
-
-    % saves the calculated cv in an array if save_cv argument is true.
-    if options.save_cv
-        saved_cv(n) = cv_curr;
-    end
+    end    
 
     % checks the loop termination condition. Checks if a local minimum for 
-    % coefficient of variation of ISIs or is reached (success!) and if yes, terminates
-    % the while loop.  
-    if (cv_curr > cv_prev)  
-        % filling the appropriate returning variables. The desired
-        % varaibles corresponding to the minimum cv score will be returned.
+    % coefficient of variation of ISIs or is reached (success!) and if yes, terminates the while loop.  
+    if (cv_curr >= cv_prev)  
+        % filling the appropriate returning variables. 
+        % The desired varaibles corresponding to the minimum cv score will be returned.
         w_out = w_prev;
         s_out = s_prev;
         a_indices_out = a_indices_prev; 
         b_indices_out = b_indices_prev;
+        idx_out = idx_prev;
+        pks_out = pks_prev;
         
         % calculates the sil and pnr measures to be returned
-        sil_score = silhouette_score(s_out.^2, a_indices_out, b_indices_out, version="ver2");
-        pnr_score = pnr(s_out.^2,a_indices_out, b_indices_out, version="ver2");
+        sil_score = silhouette_score(s_out, a_indices_out, b_indices_out, version="ver2");
+%         sil_score = mean(silhouette(pks_out', idx_out, "Euclidean")); % distance is optionable
+        pnr_score = pnr(s_out, a_indices_out, b_indices_out, version="ver2");
         
         % prints a report of the refinement loop
         if options.verbose 
@@ -190,7 +194,7 @@ while 1 % as MATLAB does not have a do-while structure, the loop condition is ch
             disp("saved cv scores: ")
             disp(saved_cv)
             disp("sil: " + num2str(sil_score))
-            disp("pnr: " + num2str(pnr_score))
+            disp("pnr: " + num2str(abs(pnr_score)))
         end
         break;
     end
@@ -214,12 +218,13 @@ while 1 % as MATLAB does not have a do-while structure, the loop condition is ch
         break;
     end
     
-    % saves the current desired variables to be used in the next iteration
-    % as previous variables.
+    % saves the current desired variables to be used in the next iteration as previous variables.
     a_indices_prev = a_indices;
     b_indices_prev = b_indices;
     s_prev = s_curr;
     w_prev = w_curr;
+    idx_prev = idx_curr;
+    pks_prev = pks_curr;
 
     % step 5d.in the pseudo code
     w_curr = mean(z(:,a_indices), 2);

@@ -5,6 +5,7 @@ arguments
     r double {mustBeScalarOrEmpty, mustBeInteger, SizeCheck(r, x)}
 end
 
+SizeCheck(r,x);
 y = [];
 for i = 1:size(x,1)
     

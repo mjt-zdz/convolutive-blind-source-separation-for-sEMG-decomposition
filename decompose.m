@@ -251,7 +251,7 @@ for i = 1:options.M
         sil_all = [sil_all sil_score];
         pnr_all = [pnr_all pnr_score];
         MUPulses = [MUPulses peak_indices];
-        fprintf('#1f781f',"Source identified at loop number " + string(i) + "\n")
+        fprintf("Source identified at loop number " + string(i) + "\n")
     end
 
     if options.verbose
